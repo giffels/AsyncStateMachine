@@ -11,7 +11,7 @@ with open(os.path.join(repo_base_dir, "tardis", "__about__.py")) as about_file:
 with open(os.path.join(repo_base_dir, "README.md"), "r") as read_me:
     long_description = read_me.read()
 
-TESTS_REQUIRE = ["flake8"]
+TESTS_REQUIRE = ["flake8", "httpx"]
 
 setup(
     name=package_about["__package__"],
@@ -43,6 +43,7 @@ setup(
             "TardisPoolFactory = tardis.resources.poolfactory:create_composite_pool",
             "TardisPeriodicValue = tardis.utilities.simulators.periodicvalue:PeriodicValue",  # noqa: B950
             "TardisRandomGauss = tardis.utilities.simulators.randomgauss:RandomGauss",
+            "TardisRestApi = tardis.rest.service:RestService",
             "TardisSSHExecutor = tardis.utilities.executors.sshexecutor:SSHExecutor",
             "TardisShellExecutor = tardis.utilities.executors.shellexecutor:ShellExecutor",  # noqa: B950
         ],
@@ -64,6 +65,9 @@ setup(
         "aioprometheus",
         "kubernetes_asyncio",
         "pydantic",
+        "fastapi",
+        "python-jose",
+        "uvicorn[standard]",
     ],
     extras_require={
         "docs": ["sphinx", "sphinx_rtd_theme", "sphinxcontrib-contentui"],

@@ -13,6 +13,8 @@ logger = logging.getLogger("cobald.runtime.tardis.plugins.sqliteregistry")
 
 
 class SqliteRegistry(Plugin):
+    thread_pool_executor = ThreadPoolExecutor(max_workers=1)
+
     def __init__(self):
         """
         The :py:class:`~tardis.plugins.sqliteregistry.SqliteRegistry` implements
@@ -26,7 +28,6 @@ class SqliteRegistry(Plugin):
         self._dispatch_on_state = dict(
             BootingState=self.insert_resource, DownState=self.delete_resource
         )
-        self.thread_pool_executor = ThreadPoolExecutor(max_workers=1)
 
         for site in configuration.Sites:
             self.add_site(site.name)
@@ -107,6 +108,10 @@ class SqliteRegistry(Plugin):
                     "INSERT OR IGNORE INTO ResourceStates(state) VALUES (?)",
                     (state,),
                 )
+
+            cursor.execute(
+                "CREATE UNIQUE INDEX IF NOT EXISTS idx_drone_uuid ON Resources (drone_uuid);"  # noqa B950
+            )
 
     async def delete_resource(self, bind_parameters: dict):
         sql_query = """DELETE FROM Resources
