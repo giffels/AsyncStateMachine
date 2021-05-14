@@ -11,7 +11,7 @@ with open(os.path.join(repo_base_dir, "tardis", "__about__.py")) as about_file:
 with open(os.path.join(repo_base_dir, "README.md"), "r") as read_me:
     long_description = read_me.read()
 
-TESTS_REQUIRE = ["flake8"]
+TESTS_REQUIRE = ["flake8", "httpx"]
 
 setup(
     name=package_about["__package__"],
@@ -66,7 +66,8 @@ setup(
         "kubernetes_asyncio",
         "pydantic",
         "fastapi",
-        "uvicorn[server]",
+        "python-jose",
+        "uvicorn[standard]",
     ],
     extras_require={
         "docs": ["sphinx", "sphinx_rtd_theme", "sphinxcontrib-contentui"],
