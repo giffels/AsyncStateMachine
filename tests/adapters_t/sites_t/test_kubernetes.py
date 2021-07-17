@@ -16,6 +16,7 @@ from kubernetes_asyncio import client
 class TestKubernetesStackAdapter(TestCase):
     mock_config_patcher = None
     mock_kubernetes_api_patcher = None
+    mock_kubernetes_hpa_patcher = None
 
     @classmethod
     def setUpClass(cls):
@@ -25,11 +26,16 @@ class TestKubernetesStackAdapter(TestCase):
             "tardis.adapters.sites.kubernetes.k8s_client.AppsV1Api"
         )
         cls.mock_kubernetes_api = cls.mock_kubernetes_api_patcher.start()
+        cls.mock_kubernetes_hpa_patcher = patch(
+            "tardis.adapters.sites.kubernetes.hpa_client.AutoscalingV1Api"
+        )
+        cls.mock_kubernetes_hpa = cls.mock_kubernetes_hpa_patcher.start()
 
     @classmethod
     def tearDownClass(cls):
         cls.mock_config_patcher.stop()
         cls.mock_kubernetes_api_patcher.stop()
+        cls.mock_kubernetes_hpa_patcher.stop()
 
     def setUp(self):
         config = self.mock_config.return_value
@@ -42,17 +48,21 @@ class TestKubernetesStackAdapter(TestCase):
             test2large=AttributeDict(
                 namespace="default",
                 image="busybox:1.26.1",
-                label="busybox",
                 args=["sleep", "3600"],
+                hpa="True",
+                min_replicas="1",
+                max_replicas="2",
+                cpu_utilization="50",
             )
         )
         test_site_config.MachineMetaData = AttributeDict(
             test2large=AttributeDict(Cores="2", Memory="400Mi")
         )
         kubernetes_api = self.mock_kubernetes_api.return_value
+        kubernetes_hpa = self.mock_kubernetes_hpa.return_value
         spec = client.V1DeploymentSpec(
             replicas=1,
-            selector=client.V1LabelSelector(match_labels={"app": "busybox"}),
+            selector=client.V1LabelSelector(match_labels={"app": "testsite-089123"}),
             template=client.V1PodTemplateSpec(),
         )
         container = client.V1Container(
@@ -64,8 +74,8 @@ class TestKubernetesStackAdapter(TestCase):
             ),
         )
         spec.template.metadata = client.V1ObjectMeta(
-            name="busybox",
-            labels={"app": "busybox"},
+            name="testsite-089123",
+            labels={"app": "testsite-089123"},
         )
         spec.template.spec = client.V1PodSpec(containers=[container])
         self.body = client.V1Deployment(
@@ -99,6 +109,12 @@ class TestKubernetesStackAdapter(TestCase):
         kubernetes_api.delete_namespaced_deployment.return_value = async_return(
             return_value=None
         )
+        kubernetes_hpa.create_namespaced_horizontal_pod_autoscaler.return_value = (
+            async_return(return_value=None)
+        )
+        kubernetes_hpa.delete_namespaced_horizontal_pod_autoscaler.return_value = (
+            async_return(return_value=None)
+        )
         self.kubernetes_adapter = KubernetesAdapter(
             machine_type="test2large", site_name="TestSite"
         )
@@ -107,12 +123,22 @@ class TestKubernetesStackAdapter(TestCase):
         kubernetes_api = self.mock_kubernetes_api.return_value
         kubernetes_api.read_namespaced_deployment.side_effect = exception
 
-    def update_read_return(self, replicas, unavailable_replicas):
+    def update_read_return(self, replicas, available_replicas):
         kubernetes_api = self.mock_kubernetes_api.return_value
         self.read_return_value.spec.replicas = replicas
-        self.read_return_value.status.unavailable_replicas = unavailable_replicas
+        self.read_return_value.status.available_replicas = available_replicas
         kubernetes_api.read_namespaced_deployment.return_value = async_return(
             return_value=self.read_return_value
+        )
+
+    def update_delete_side_effect(self, exception):
+        kubernetes_api = self.mock_kubernetes_api.return_value
+        kubernetes_api.delete_namespaced_deployment.side_effect = exception
+
+    def update_delete_hpa_side_effect(self, exception):
+        kubernetes_hpa = self.mock_kubernetes_hpa.return_value
+        kubernetes_hpa.delete_namespaced_horizontal_pod_autoscaler.side_effect = (
+            exception
         )
 
     def tearDown(self):
@@ -151,6 +177,7 @@ class TestKubernetesStackAdapter(TestCase):
 
     @patch("kubernetes_asyncio.client.rest.aiohttp")
     def test_resource_status(self, mocked_aiohttp):
+        self.update_read_return(replicas=1, available_replicas=1)
         self.assertEqual(
             run_async(
                 self.kubernetes_adapter.resource_status,
@@ -167,7 +194,7 @@ class TestKubernetesStackAdapter(TestCase):
         self.mock_kubernetes_api.return_value.read_namespaced_deployment.assert_called_with(  # noqa: B950
             name="testsite-089123", namespace="default"
         )
-        self.update_read_return(replicas=0, unavailable_replicas=None)
+        self.update_read_return(replicas=0, available_replicas=1)
         self.assertEqual(
             run_async(
                 self.kubernetes_adapter.resource_status,
@@ -181,7 +208,7 @@ class TestKubernetesStackAdapter(TestCase):
                 resource_status=ResourceStatus.Stopped,
             ),
         )
-        self.update_read_return(replicas=1, unavailable_replicas=1)
+        self.update_read_return(replicas=1, available_replicas=None)
         self.assertEqual(
             run_async(
                 self.kubernetes_adapter.resource_status,
@@ -254,6 +281,20 @@ class TestKubernetesStackAdapter(TestCase):
                 propagation_policy="Foreground", grace_period_seconds=5
             ),
         )
+        self.update_delete_side_effect(exception=K8SApiException(status=500))
+        with self.assertRaises(K8SApiException):
+            run_async(
+                self.kubernetes_adapter.terminate_resource,
+                resource_attributes=AttributeDict(drone_uuid="testsite-089123"),
+            )
+        self.update_delete_side_effect(exception=None)
+        self.update_delete_hpa_side_effect(exception=K8SApiException(status=500))
+        with self.assertRaises(K8SApiException):
+            run_async(
+                self.kubernetes_adapter.terminate_resource,
+                resource_attributes=AttributeDict(drone_uuid="testsite-089123"),
+            )
+        self.update_delete_hpa_side_effect(exception=None)
 
     def test_exception_handling(self):
         def test_exception_handling(to_raise, to_catch):
