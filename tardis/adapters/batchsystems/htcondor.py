@@ -2,7 +2,8 @@ from ...configuration.configuration import Configuration
 from ...exceptions.executorexceptions import CommandExecutionFailure
 from ...interfaces.batchsystemadapter import BatchSystemAdapter
 from ...interfaces.batchsystemadapter import MachineStatus
-from ...utilities.utils import async_run_command
+from ...interfaces.executor import Executor
+from ...utilities.executors.shellexecutor import ShellExecutor
 from ...utilities.utils import htcondor_cmd_option_formatter
 from ...utilities.utils import csv_parser
 from ...utilities.asynccachemap import AsyncCacheMap
@@ -17,7 +18,7 @@ logger = logging.getLogger("cobald.runtime.tardis.adapters.batchsystem.htcondor"
 
 
 async def htcondor_status_updater(
-    options: AttributeDict, attributes: AttributeDict
+    options: AttributeDict, attributes: AttributeDict, executor: Executor
 ) -> dict:
     """
     Helper function to call ``condor_status -af`` asynchronously and to translate
@@ -47,9 +48,9 @@ async def htcondor_status_updater(
 
     try:
         logger.debug(f"HTCondor status update is running. Command: {cmd}")
-        condor_status = await async_run_command(cmd)
+        condor_status = await executor.run_command(cmd)
         for row in csv_parser(
-            input_csv=condor_status,
+            input_csv=condor_status.stdout,
             fieldnames=tuple(attributes.keys()),
             delimiter="\t",
             replacements=dict(undefined=None),
@@ -75,6 +76,7 @@ class HTCondorAdapter(BatchSystemAdapter):
     def __init__(self):
         config = Configuration()
         self.ratios = config.BatchSystem.ratios
+        self._executor = getattr(config.BatchSystem, "executor", ShellExecutor())
 
         try:
             self.htcondor_options = config.BatchSystem.options
@@ -93,7 +95,10 @@ class HTCondorAdapter(BatchSystemAdapter):
 
         self._htcondor_status = AsyncCacheMap(
             update_coroutine=partial(
-                htcondor_status_updater, self.htcondor_options, attributes
+                htcondor_status_updater,
+                self.htcondor_options,
+                attributes,
+                self._executor,
             ),
             max_age=config.BatchSystem.max_age * 60,
         )
@@ -133,7 +138,7 @@ class HTCondorAdapter(BatchSystemAdapter):
             cmd = f"condor_drain -graceful {slot_name}"
 
         try:
-            return await async_run_command(cmd)
+            await self._executor.run_command(cmd)
         except CommandExecutionFailure as cef:
             if cef.exit_code == 1:
                 # exit code 1: HTCondor can't connect to StartD of Drone

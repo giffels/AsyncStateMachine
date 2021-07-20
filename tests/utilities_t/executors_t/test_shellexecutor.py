@@ -14,10 +14,13 @@ class TestAsyncRunCommand(TestCase):
     def test_run_command(self):
 
         self.assertEqual(run_async(self.executor.run_command, "exit 0").exit_code, 0)
+        self.assertEqual(
+            run_async(self.executor.run_command, "exit 255").exit_code, 255
+        )
 
         with self.assertRaises(CommandExecutionFailure) as cf:
-            run_async(self.executor.run_command, "exit 255")
-        self.assertEqual(cf.exception.exit_code, 255)
+            run_async(self.executor.run_command, "exit 254")
+        self.assertEqual(cf.exception.exit_code, 254)
 
         self.assertEqual(
             run_async(self.executor.run_command, 'echo "Test"').stdout, "Test"
@@ -42,10 +45,11 @@ class TestAsyncRunCommand(TestCase):
         """
         )
         self.assertEqual(run_async(executor.run_command, "exit 0").exit_code, 0)
+        self.assertEqual(run_async(executor.run_command, "exit 255").exit_code, 255)
 
         with self.assertRaises(CommandExecutionFailure) as cf:
-            run_async(self.executor.run_command, "exit 255")
-        self.assertEqual(cf.exception.exit_code, 255)
+            run_async(self.executor.run_command, "exit 254")
+        self.assertEqual(cf.exception.exit_code, 254)
 
         self.assertEqual(run_async(executor.run_command, 'echo "Test"').stdout, "Test")
 

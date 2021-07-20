@@ -108,6 +108,10 @@ Available configuration options
     +----------------+-------------------------------------------------------------------------+-----------------+
     | options        | Additional command line options to add to the ``condor_status`` command |  **Optional**   |
     +----------------+-------------------------------------------------------------------------+-----------------+
+    | executor       | The |executor| used to run commands of the batch system.                |  **Optional**   |
+    +                +                                                                         +                 +
+    |                | Default: ShellExecutor is used!                                         |                 |
+    +----------------+-------------------------------------------------------------------------+-----------------+
 
 .. content-tabs:: right-col
 
@@ -192,6 +196,10 @@ Available configuration options
     | max_age        | Maximum age of the cached ``sinfo`` information in minutes                                                                |  **Required**   |
     +----------------+---------------------------------------------------------------------------------------------------------------------------+-----------------+
     | options        | Additional command line options to add to the ``sinfo`` command. `long` and `short` arguments are supported (see example) |  **Optional**   |
+    +----------------+---------------------------------------------------------------------------------------------------------------------------+-----------------+
+    | executor       | The |executor| used to run commands of the batch system.                                                                  |  **Optional**   |
+    +                +                                                                                                                           +                 +
+    |                | Default: ShellExecutor is used!                                                                                           |                 |
     +----------------+---------------------------------------------------------------------------------------------------------------------------+-----------------+
 
 .. content-tabs:: right-col

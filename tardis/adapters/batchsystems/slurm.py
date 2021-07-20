@@ -10,15 +10,16 @@ from ...configuration.configuration import Configuration
 from ...exceptions.executorexceptions import CommandExecutionFailure
 from ...interfaces.batchsystemadapter import BatchSystemAdapter
 from ...interfaces.batchsystemadapter import MachineStatus
-from ...utilities.utils import async_run_command
+from ...interfaces.executor import Executor
 from ...utilities.utils import submit_cmd_option_formatter
 from ...utilities.utils import csv_parser
+from ...utilities.executors.shellexecutor import ShellExecutor
 from ...utilities.asynccachemap import AsyncCacheMap
 from ...utilities.attributedict import AttributeDict
 
 
 async def slurm_status_updater(
-    options: AttributeDict, attributes: AttributeDict
+    options: AttributeDict, attributes: AttributeDict, executor: Executor
 ) -> dict:
     """
     Slurm status update.
@@ -44,9 +45,9 @@ async def slurm_status_updater(
 
     try:
         logging.debug(f"SLURM status update is running. Command: {cmd}")
-        status = await async_run_command(cmd)
+        status = await executor.run_command(cmd)
         for row in csv_parser(
-            input_csv=status,
+            input_csv=status.stdout,
             fieldnames=tuple(attributes.keys()),
             delimiter=" ",
             replacements=dict(undefined=None),
@@ -79,6 +80,7 @@ class SlurmAdapter(BatchSystemAdapter):
 
     def __init__(self):
         config = Configuration()
+        self._executor = getattr(config.BatchSystem, "executor", ShellExecutor())
 
         try:
             self.slurm_options = config.BatchSystem.options
@@ -96,7 +98,7 @@ class SlurmAdapter(BatchSystemAdapter):
 
         self._slurm_status = AsyncCacheMap(
             update_coroutine=partial(
-                slurm_status_updater, self.slurm_options, attributes
+                slurm_status_updater, self.slurm_options, attributes, self._executor
             ),
             max_age=config.BatchSystem.max_age * 60,
         )
@@ -131,7 +133,7 @@ class SlurmAdapter(BatchSystemAdapter):
 
         cmd = f"scontrol update NodeName={machine} State=DRAIN Reason='COBalD/TARDIS'"
 
-        return await async_run_command(cmd)
+        await self._executor.run_command(cmd)
 
     async def integrate_machine(self, drone_uuid: str) -> None:
         """

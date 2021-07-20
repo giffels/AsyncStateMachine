@@ -24,7 +24,17 @@ class ShellExecutor(Executor):
         )
         exit_code = sub_process.returncode
 
-        if exit_code:
+        # Potentially due to a Python bug, if waitpid(0) is called somewhere else,
+        # the message "WARNING:asyncio:Unknown child process pid 2960761,
+        # will report returncode 255 appears"
+        # However the command succeeded
+        if not exit_code or exit_code == 255:
+            return AttributeDict(
+                stdout=stdout.decode().strip(),
+                stderr=stderr.decode().strip(),
+                exit_code=exit_code,
+            )
+        else:
             raise CommandExecutionFailure(
                 message=f"Run command {command} via ShellExecutor failed",
                 exit_code=exit_code,
@@ -32,9 +42,3 @@ class ShellExecutor(Executor):
                 stderr=stderr.decode().strip(),
                 stdin=stdin_input,
             )
-
-        return AttributeDict(
-            stdout=stdout.decode().strip(),
-            stderr=stderr.decode().strip(),
-            exit_code=exit_code,
-        )

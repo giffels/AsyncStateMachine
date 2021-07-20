@@ -1,24 +1,9 @@
 from tardis.utilities.attributedict import AttributeDict
-from tardis.utilities.utils import async_run_command
 from tardis.utilities.utils import htcondor_cmd_option_formatter
 from tardis.utilities.utils import csv_parser
 from tardis.utilities.utils import submit_cmd_option_formatter
-from tardis.exceptions.executorexceptions import CommandExecutionFailure
-
-from ..utilities.utilities import run_async
 
 from unittest import TestCase
-
-
-class TestAsyncRunCommand(TestCase):
-    def test_async_run_command(self):
-        run_async(async_run_command, "exit 0")
-        run_async(async_run_command, "exit 255")
-
-        with self.assertRaises(CommandExecutionFailure):
-            run_async(async_run_command, "exit 1")
-
-        self.assertEqual(run_async(async_run_command, 'echo "Test"'), "Test")
 
 
 class TestHTCondorCMDOptionFormatter(TestCase):
